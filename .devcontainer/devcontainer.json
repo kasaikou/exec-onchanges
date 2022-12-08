@@ -1,0 +1,13 @@
+{
+    "name": "exec-onchanges Development Container",
+    "dockerComposeFile": "./docker-compose.yml",
+    "service": "devcontainer",
+    "workspaceFolder": "/workspace",
+    "remoteUser": "vscode",
+    "postCreateCommand": "/bin/sh /workspace/.devcontainer/post_create.sh",
+    "extensions": [
+        "golang.go",
+        "eamodio.gitlens",
+        "mhutchie.git-graph"
+    ]
+}
