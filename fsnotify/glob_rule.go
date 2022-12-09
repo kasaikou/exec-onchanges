@@ -68,8 +68,8 @@ func compileRule(rootDir, rule string) (glob.Glob, error) {
 
 	if strings.HasPrefix(toslash, "./") {
 		return glob.Compile(filepath.Join(rootDir, filepath.FromSlash(rule)), filepath.Separator)
-	} else if filepath.IsAbs(rule) {
-		return glob.Compile(rule)
+	} else if filepath.IsAbs(rule) || strings.HasPrefix(toslash, "**/") {
+		return glob.Compile(rule, filepath.Separator)
 	} else {
 		return glob.Compile(filepath.Join("**", filepath.FromSlash(rule)), filepath.Separator)
 	}
