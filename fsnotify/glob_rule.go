@@ -43,7 +43,7 @@ func newGlobRuleManager(rootDir string, prefferedRule GlobRuleType, includeGlobR
 	return manager
 }
 
-func (m *globRuleManager) IsInclude(path string) (bool, error) {
+func (m *globRuleManager) IsInclude(path string, isdir bool) (bool, error) {
 
 	relpath, err := func() (string, error) {
 		if filepath.IsAbs(path) {
@@ -81,5 +81,5 @@ func (m *globRuleManager) IsInclude(path string) (bool, error) {
 			}
 		}
 	}
-	return true, nil
+	return isdir, nil
 }
