@@ -11,11 +11,19 @@ type GlobRuleType bool
 
 type GlobRuleCmd int
 
+type GlobRuleResult int
+
 const (
 	GlobRuleAdd GlobRuleCmd = iota
 	GlobRuleDelete
 	GlobIncludeRule GlobRuleType = false
 	GlobExcludeRule GlobRuleType = true
+)
+
+const (
+	GlobRuleDefault GlobRuleResult = iota
+	GlobRuleInclude
+	GlobRuleExclude
 )
 
 type globRuleManager struct {
@@ -43,7 +51,7 @@ func newGlobRuleManager(rootDir string, prefferedRule GlobRuleType, includeGlobR
 	return manager
 }
 
-func (m *globRuleManager) IsInclude(path string, isdir bool) (bool, error) {
+func (m *globRuleManager) IsInclude(path string) (GlobRuleResult, error) {
 
 	relpath, err := func() (string, error) {
 		if filepath.IsAbs(path) {
@@ -53,7 +61,7 @@ func (m *globRuleManager) IsInclude(path string, isdir bool) (bool, error) {
 		}
 	}()
 	if err != nil {
-		return false, fmt.Errorf("cannot convert to relative path: %s: %w", path, err)
+		return GlobRuleDefault, fmt.Errorf("cannot convert to relative path: %s: %w", path, err)
 	}
 
 	relpath = filepath.ToSlash(relpath)
@@ -61,25 +69,25 @@ func (m *globRuleManager) IsInclude(path string, isdir bool) (bool, error) {
 	case GlobIncludeRule:
 		for _, glob := range m.includeRules {
 			if glob.Match(relpath) {
-				return true, nil
+				return GlobRuleInclude, nil
 			}
 		}
 		for _, glob := range m.excludeRules {
 			if glob.Match(relpath) {
-				return false, nil
+				return GlobRuleExclude, nil
 			}
 		}
 	case GlobExcludeRule:
 		for _, glob := range m.excludeRules {
 			if glob.Match(relpath) {
-				return false, nil
+				return GlobRuleExclude, nil
 			}
 		}
 		for _, glob := range m.includeRules {
 			if glob.Match(relpath) {
-				return true, nil
+				return GlobRuleInclude, nil
 			}
 		}
 	}
-	return isdir, nil
+	return GlobRuleDefault, nil
 }
