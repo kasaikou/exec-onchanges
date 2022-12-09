@@ -38,9 +38,13 @@ func NewWatcher(logger *zap.Logger, rootAbsDir string, preferredRule GlobRuleTyp
 		Event:  events,
 	}
 
+	globManager, err := newGlobRuleManager(rootAbsDir, preferredRule, includeGlobRules, excludeGlobRules)
+	if err != nil {
+		return nil, err
+	}
+
 	go func() {
 		logger.Info("search directories as initialize")
-		globManager := newGlobRuleManager(rootAbsDir, preferredRule, includeGlobRules, excludeGlobRules)
 		addRecursive(rootAbsDir, globManager, notifier)
 
 		for {
