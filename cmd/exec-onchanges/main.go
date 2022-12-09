@@ -122,5 +122,14 @@ func unquote(str string) string {
 }
 
 func help() {
-
+	fmt.Println("exec-onchanges: Execute command on file changed and created")
+	fmt.Println("")
+	fmt.Println("Usage: exec-onchanges (Options...) -- (Command and arguments...)")
+	fmt.Println("Example: exec-onchanges -i=**.go -e=.git -- gofmt -w '{{FILEPATH}}'")
+	fmt.Println("")
+	fmt.Println("Options:")
+	fmt.Println("  -h, --help:              Display help (this is this)")
+	fmt.Println("  -f, --file=path/to/file: Filepath to configuration file (YAML)")
+	fmt.Println("  -i, --include=path/rule: Monitoring path rule (support '*', '**' wildcards)")
+	fmt.Println("  -e, --exclude=path/rule: Excluded Monitoring path rule (support '*', '**' wildcards)")
 }
