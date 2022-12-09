@@ -25,11 +25,19 @@ func RouteExecOnchanges(ctx context.Context, logger *zap.Logger, param ExecOncha
 	if err != nil {
 		return err
 	}
-	watcher, err := fsnotify.NewWatcher(logger, absRootDir, fsnotify.GlobIncludeRule, param.IncludeRules, param.ExcludeRules)
-	if err != nil {
-		return err
-	}
-	defer watcher.Stop()
+
+	ctx, cancel := context.WithCancel(ctx)
+	eventCh := make(chan fsnotify.Event)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := fsnotify.RouteWatch(ctx, logger, absRootDir, fsnotify.GlobIncludeRule, param.IncludeRules, param.ExcludeRules, eventCh); err != nil {
+			logger.Error("error in route watch", zap.Error(err))
+			cancel()
+		}
+	}()
+	defer wg.Wait()
 
 	parallels := parallelProcesses{}
 
@@ -38,7 +46,7 @@ func RouteExecOnchanges(ctx context.Context, logger *zap.Logger, param ExecOncha
 		select {
 		case <-ctx.Done():
 			return nil
-		case event := <-watcher.Event:
+		case event := <-eventCh:
 			if parallels.numRunning() > 0 {
 				logger.Info("file change detected, but it will be skipped because process is running", zap.String("path", event.Name))
 				break selectBreak
@@ -55,7 +63,7 @@ func RouteExecOnchanges(ctx context.Context, logger *zap.Logger, param ExecOncha
 				select {
 				case <-timer.C:
 					break timeoutLoop
-				case event := <-watcher.Event:
+				case event := <-eventCh:
 					if !IsActionEvent(event) {
 						break selectBreakInTimer
 					}
