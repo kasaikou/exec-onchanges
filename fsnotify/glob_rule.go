@@ -3,6 +3,7 @@ package fsnotify
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/gobwas/glob"
 )
@@ -33,7 +34,7 @@ type globRuleManager struct {
 	excludeRules  []glob.Glob
 }
 
-func newGlobRuleManager(rootDir string, prefferedRule GlobRuleType, includeGlobRules, excludeGlobRules []string) *globRuleManager {
+func newGlobRuleManager(rootDir string, prefferedRule GlobRuleType, includeGlobRules, excludeGlobRules []string) (*globRuleManager, error) {
 	manager := &globRuleManager{
 		rootDir:       rootDir,
 		prefferedRule: prefferedRule,
@@ -42,49 +43,68 @@ func newGlobRuleManager(rootDir string, prefferedRule GlobRuleType, includeGlobR
 	}
 
 	for _, rule := range includeGlobRules {
-		manager.includeRules = append(manager.includeRules, glob.MustCompile(rule))
+		glob, err := compileRule(rootDir, rule)
+		if err != nil {
+			return nil, err
+		}
+		manager.includeRules = append(manager.includeRules, glob)
 	}
 	for _, rule := range excludeGlobRules {
-		manager.excludeRules = append(manager.excludeRules, glob.MustCompile(rule))
+		glob, err := compileRule(rootDir, rule)
+		if err != nil {
+			return nil, err
+		}
+		manager.excludeRules = append(manager.excludeRules, glob)
 	}
 
-	return manager
+	return manager, nil
+}
+
+func compileRule(rootDir, rule string) (glob.Glob, error) {
+	toslash := filepath.ToSlash(rule)
+	if strings.Contains(toslash, "/../") || strings.HasPrefix(toslash, "../") {
+		return nil, fmt.Errorf("found '/../' in path rule")
+	}
+
+	if strings.HasPrefix(toslash, "./") {
+		return glob.Compile(filepath.Join(rootDir, filepath.FromSlash(rule)), filepath.Separator)
+	} else if filepath.IsAbs(rule) || strings.HasPrefix(toslash, "**/") {
+		return glob.Compile(rule, filepath.Separator)
+	} else {
+		return glob.Compile(filepath.Join("**", filepath.FromSlash(rule)), filepath.Separator)
+	}
 }
 
 func (m *globRuleManager) IsInclude(path string) (GlobRuleResult, error) {
 
-	relpath, err := func() (string, error) {
+	abspath := func() string {
 		if filepath.IsAbs(path) {
-			return filepath.Rel(m.rootDir, path)
+			return path
 		} else {
-			return path, nil
+			return filepath.Join(m.rootDir, path)
 		}
 	}()
-	if err != nil {
-		return GlobRuleDefault, fmt.Errorf("cannot convert to relative path: %s: %w", path, err)
-	}
 
-	relpath = filepath.ToSlash(relpath)
 	switch m.prefferedRule {
 	case GlobIncludeRule:
 		for _, glob := range m.includeRules {
-			if glob.Match(relpath) {
+			if glob.Match(abspath) {
 				return GlobRuleInclude, nil
 			}
 		}
 		for _, glob := range m.excludeRules {
-			if glob.Match(relpath) {
+			if glob.Match(abspath) {
 				return GlobRuleExclude, nil
 			}
 		}
 	case GlobExcludeRule:
 		for _, glob := range m.excludeRules {
-			if glob.Match(relpath) {
+			if glob.Match(abspath) {
 				return GlobRuleExclude, nil
 			}
 		}
 		for _, glob := range m.includeRules {
-			if glob.Match(relpath) {
+			if glob.Match(abspath) {
 				return GlobRuleInclude, nil
 			}
 		}
