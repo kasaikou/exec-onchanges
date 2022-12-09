@@ -67,27 +67,29 @@ func RouteExecOnchanges(ctx context.Context, logger *zap.Logger, param ExecOncha
 
 			command := []string{}
 			for path := range events {
-				parallels.add(func() {
-					cmd := func() *exec.Cmd {
-						command = command[:0]
-						for _, arg := range param.Command {
-							command = append(command, strings.ReplaceAll(arg, "{{FILEPATH}}", path))
-						}
-						if len(command) > 1 {
-							return exec.Command(command[0], command[1:]...)
-						} else {
-							return exec.Command(command[0])
-						}
-					}()
+				func(path string) {
+					parallels.add(func() {
+						cmd := func() *exec.Cmd {
+							command = command[:0]
+							for _, arg := range param.Command {
+								command = append(command, strings.ReplaceAll(arg, "{{FILEPATH}}", path))
+							}
+							if len(command) > 1 {
+								return exec.Command(command[0], command[1:]...)
+							} else {
+								return exec.Command(command[0])
+							}
+						}()
 
-					cmd.Stdout = os.Stdout
-					cmd.Stderr = os.Stderr
+						cmd.Stdout = os.Stdout
+						cmd.Stderr = os.Stderr
 
-					logger.Info("execute command", zap.String("command", cmd.String()))
-					if err := cmd.Run(); err != nil {
-						logger.Error("process error", zap.Error(err))
-					}
-				})
+						logger.Info("execute command", zap.String("command", cmd.String()))
+						if err := cmd.Run(); err != nil {
+							logger.Error("process error", zap.Error(err))
+						}
+					})
+				}(path)
 			}
 		}
 	}
