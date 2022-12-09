@@ -100,6 +100,10 @@ func (w *Watcher) Stop() (alreadyStopped bool) {
 	return false
 }
 
+func IsRemoveEvent(event fsnotify.Event) bool {
+	return event.Op&fsnotify.Remove != 0
+}
+
 func addRecursive(abspath string, manager *globRuleManager, watcher *fsnotify.Watcher) error {
 	ignoredDirs := map[string]struct{}{}
 
