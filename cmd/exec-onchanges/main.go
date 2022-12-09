@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,7 +23,8 @@ func main() {
 	flagCmd := []string{}
 
 	// Read CLI arguments
-	for i := 0; i < len(os.Args); i++ {
+readBreak:
+	for i := 1; i < len(os.Args); i++ {
 		switch {
 		case os.Args[i] == "-h", os.Args[i] == "--help":
 			help()
@@ -45,8 +47,9 @@ func main() {
 		case os.Args[i] == "--":
 			i++
 			flagCmd = os.Args[i:]
+			break readBreak
 		default:
-			logger.Fatal("unknown exception: " + os.Args[i])
+			logger.Fatal(fmt.Sprintf("unknown expression: \"%s\"", os.Args[i]))
 		}
 	}
 
