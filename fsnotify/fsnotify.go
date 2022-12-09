@@ -54,25 +54,27 @@ func NewWatcher(logger *zap.Logger, rootAbsDir string, preferredRule GlobRuleTyp
 
 			case event := <-notifier.Events:
 
-				abspath := abs(rootAbsDir, event.Name)
-				if s, err := os.Stat(abspath); err == nil && s != nil {
-					if include, err := globManager.IsInclude(event.Name, s.IsDir()); err != nil {
-						logger.Error("error in checking", zap.Error(err))
-					} else if !include {
-						break selectBreak
-					}
+				include, err := globManager.IsInclude(event.Name)
+				if err != nil {
+					logger.Error("error in checking", zap.Error(err))
+					break selectBreak
+				} else if include == GlobRuleExclude {
+					break selectBreak
+				}
 
-					if s.IsDir() {
-						if event.Op&fsnotify.Create != 0 {
-							if err := addRecursive(abspath, globManager, notifier); err != nil {
-								logger.Error("cannot add fsnotify monitoring", zap.Error(err), zap.String("path", abspath))
-							}
+				abspath := abs(rootAbsDir, event.Name)
+				if s, err := os.Stat(abspath); err == nil && s != nil && s.IsDir() {
+					if event.Op&fsnotify.Create != 0 {
+						if err := addRecursive(abspath, globManager, notifier); err != nil {
+							logger.Error("cannot add fsnotify monitoring", zap.Error(err), zap.String("path", abspath))
 						}
 					}
-					if event.Op&fsnotify.Remove != 0 {
-						notifier.Remove(event.Name)
-					}
+				}
+				if event.Op&fsnotify.Remove != 0 {
+					notifier.Remove(event.Name)
+				}
 
+				if include == GlobRuleInclude {
 					events <- event
 				}
 			}
@@ -103,19 +105,28 @@ func addRecursive(abspath string, manager *globRuleManager, watcher *fsnotify.Wa
 
 	return filepath.WalkDir(abspath, func(path string, d fs.DirEntry, err error) error {
 		absItempath := abs(abspath, path)
-		isdir := d.IsDir()
 
+		isdir := d.IsDir()
 		if err != nil {
-			if included, err := manager.IsInclude(absItempath, isdir); err == nil && !included {
-				return nil
+			if included, err := manager.IsInclude(absItempath); err == nil {
+				if isdir {
+					if _, exist := ignoredDirs[filepath.Dir(absItempath)]; exist || included == GlobRuleExclude {
+						ignoredDirs[absItempath] = struct{}{}
+						return nil
+					}
+				} else {
+					if included == GlobRuleDefault || included == GlobRuleExclude {
+						return nil
+					}
+				}
 			}
 			return err
 		}
 		if isdir {
-			included, err := manager.IsInclude(absItempath, isdir)
+			included, err := manager.IsInclude(absItempath)
 			if err != nil {
 				return err
-			} else if _, exist := ignoredDirs[filepath.Dir(absItempath)]; !included || exist {
+			} else if _, exist := ignoredDirs[filepath.Dir(absItempath)]; exist || included == GlobRuleExclude {
 				ignoredDirs[absItempath] = struct{}{}
 			} else {
 				if err := watcher.Add(absItempath); err != nil {
