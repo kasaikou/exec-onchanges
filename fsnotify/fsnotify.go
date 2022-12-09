@@ -53,25 +53,28 @@ func NewWatcher(logger *zap.Logger, rootAbsDir string, preferredRule GlobRuleTyp
 				return
 
 			case event := <-notifier.Events:
-				if include, err := globManager.IsInclude(event.Name); err != nil {
-					logger.Error("error in checking", zap.Error(err))
-				} else if !include {
-					break selectBreak
-				}
 
 				abspath := abs(rootAbsDir, event.Name)
-				if s, err := os.Stat(abspath); err == nil && s != nil && s.IsDir() {
-					if event.Op&fsnotify.Create != 0 {
-						if err := addRecursive(abspath, globManager, notifier); err != nil {
-							logger.Error("cannot add fsnotify monitoring", zap.Error(err), zap.String("path", abspath))
+				if s, err := os.Stat(abspath); err == nil && s != nil {
+					if include, err := globManager.IsInclude(event.Name, s.IsDir()); err != nil {
+						logger.Error("error in checking", zap.Error(err))
+					} else if !include {
+						break selectBreak
+					}
+
+					if s.IsDir() {
+						if event.Op&fsnotify.Create != 0 {
+							if err := addRecursive(abspath, globManager, notifier); err != nil {
+								logger.Error("cannot add fsnotify monitoring", zap.Error(err), zap.String("path", abspath))
+							}
 						}
 					}
-				}
-				if event.Op&fsnotify.Remove != 0 {
-					notifier.Remove(event.Name)
-				}
+					if event.Op&fsnotify.Remove != 0 {
+						notifier.Remove(event.Name)
+					}
 
-				events <- event
+					events <- event
+				}
 			}
 		}
 	}()
@@ -100,14 +103,16 @@ func addRecursive(abspath string, manager *globRuleManager, watcher *fsnotify.Wa
 
 	return filepath.WalkDir(abspath, func(path string, d fs.DirEntry, err error) error {
 		absItempath := abs(abspath, path)
+		isdir := d.IsDir()
+
 		if err != nil {
-			if included, err := manager.IsInclude(absItempath); err == nil && !included {
+			if included, err := manager.IsInclude(absItempath, isdir); err == nil && !included {
 				return nil
 			}
 			return err
 		}
-		if d.IsDir() {
-			included, err := manager.IsInclude(absItempath)
+		if isdir {
+			included, err := manager.IsInclude(absItempath, isdir)
 			if err != nil {
 				return err
 			} else if _, exist := ignoredDirs[filepath.Dir(absItempath)]; !included || exist {
