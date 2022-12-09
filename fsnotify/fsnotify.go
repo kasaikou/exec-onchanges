@@ -1,22 +1,16 @@
 package fsnotify
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"go.uber.org/zap"
 	"gopkg.in/fsnotify.v1"
 )
 
 type Event = fsnotify.Event
-
-type Watcher struct {
-	lock   sync.Mutex
-	closer chan<- *sync.WaitGroup
-	Event  <-chan Event
-}
 
 func abs(root, path string) string {
 	if filepath.IsAbs(path) {
@@ -26,82 +20,54 @@ func abs(root, path string) string {
 	}
 }
 
-func NewWatcher(logger *zap.Logger, rootAbsDir string, preferredRule GlobRuleType, includeGlobRules, excludeGlobRules []string) (*Watcher, error) {
-	closer := make(chan *sync.WaitGroup, 1)
-	events := make(chan fsnotify.Event)
+func RouteWatch(ctx context.Context, logger *zap.Logger, rootAbsDir string, preferredRule GlobRuleType, includeGlobRules, excludeGlobRules []string, eventReciever chan<- Event) error {
+
 	notifier, err := fsnotify.NewWatcher()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	watcher := &Watcher{
-		closer: closer,
-		Event:  events,
-	}
+	defer notifier.Close()
 
 	globManager, err := newGlobRuleManager(rootAbsDir, preferredRule, includeGlobRules, excludeGlobRules)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	logger.Info("search directories as initialize")
+	addRecursive(rootAbsDir, globManager, notifier)
 
-	go func() {
-		logger.Info("search directories as initialize")
-		addRecursive(rootAbsDir, globManager, notifier)
+	for {
+	selectBreak:
+		select {
+		case <-ctx.Done():
+			return nil
 
-		for {
+		case event := <-notifier.Events:
 
-		selectBreak:
-			select {
-			case wg := <-closer:
-				defer wg.Done()
-				notifier.Close()
-				return
+			include, err := globManager.IsInclude(event.Name)
+			if err != nil {
+				logger.Error("error in checking", zap.Error(err))
+				break selectBreak
+			} else if include == GlobRuleExclude {
+				break selectBreak
+			}
 
-			case event := <-notifier.Events:
-
-				include, err := globManager.IsInclude(event.Name)
-				if err != nil {
-					logger.Error("error in checking", zap.Error(err))
-					break selectBreak
-				} else if include == GlobRuleExclude {
-					break selectBreak
-				}
-
-				abspath := abs(rootAbsDir, event.Name)
-				if s, err := os.Stat(abspath); err == nil && s != nil && s.IsDir() {
-					if event.Op&fsnotify.Create != 0 {
-						if err := addRecursive(abspath, globManager, notifier); err != nil {
-							logger.Error("cannot add fsnotify monitoring", zap.Error(err), zap.String("path", abspath))
-						}
+			abspath := abs(rootAbsDir, event.Name)
+			if s, err := os.Stat(abspath); err == nil && s != nil && s.IsDir() {
+				if event.Op&fsnotify.Create != 0 {
+					if err := addRecursive(abspath, globManager, notifier); err != nil {
+						logger.Error("cannot add fsnotify monitoring", zap.Error(err), zap.String("path", abspath))
 					}
 				}
-				if event.Op&fsnotify.Remove != 0 {
-					notifier.Remove(event.Name)
-				}
+			}
+			if event.Op&fsnotify.Remove != 0 {
+				notifier.Remove(event.Name)
+			}
 
-				if include == GlobRuleInclude {
-					events <- event
-				}
+			if include == GlobRuleInclude {
+				eventReciever <- event
 			}
 		}
-	}()
-
-	return watcher, nil
-}
-
-func (w *Watcher) Stop() (alreadyStopped bool) {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-	if w.closer == nil {
-		return true
 	}
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	w.closer <- &wg
-	wg.Wait()
-	close(w.closer)
-	w.closer = nil
-	return false
 }
 
 func IsRemoveEvent(event fsnotify.Event) bool {
