@@ -42,6 +42,8 @@ func RouteExecOnchanges(ctx context.Context, logger *zap.Logger, param ExecOncha
 			if parallels.numRunning() > 0 {
 				logger.Info("file change detected, but it will be skipped because process is running", zap.String("path", event.Name))
 				break selectBreak
+			} else if !IsActionEvent(event) {
+				break selectBreak
 			}
 
 			events := map[string]struct{}{event.Name: {}}
@@ -49,10 +51,15 @@ func RouteExecOnchanges(ctx context.Context, logger *zap.Logger, param ExecOncha
 
 		timeoutLoop:
 			for {
+			selectBreakInTimer:
 				select {
 				case <-timer.C:
 					break timeoutLoop
 				case event := <-watcher.Event:
+					if !IsActionEvent(event) {
+						break selectBreakInTimer
+					}
+
 					events[event.Name] = struct{}{}
 					if !timer.Stop() {
 						select {
@@ -93,6 +100,18 @@ func RouteExecOnchanges(ctx context.Context, logger *zap.Logger, param ExecOncha
 			}
 		}
 	}
+}
+
+func IsActionEvent(event fsnotify.Event) bool {
+	if fsnotify.IsRemoveEvent(event) {
+		return false
+	}
+
+	info, err := os.Stat(event.Name)
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
 }
 
 type parallelProcesses struct {
