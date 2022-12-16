@@ -20,6 +20,9 @@ func abs(root, path string) string {
 	}
 }
 
+// Watches the specified directory or files changed.
+//
+// Not that it is designed to be executed persistently.
 func RouteWatch(ctx context.Context, logger *zap.Logger, rootAbsDir string, preferredRule GlobRuleType, includeGlobRules, excludeGlobRules []string, eventReciever chan<- Event) error {
 
 	notifier, err := fsnotify.NewWatcher()
@@ -70,11 +73,12 @@ func RouteWatch(ctx context.Context, logger *zap.Logger, rootAbsDir string, pref
 	}
 }
 
+// Check if event is a deletion event using the [fsnotify.Remove] flag.
 func IsRemoveEvent(event fsnotify.Event) bool {
 	return event.Op&fsnotify.Remove != 0
 }
 
-func addRecursive(abspath string, manager *globRuleManager, watcher *fsnotify.Watcher) error {
+func addRecursive(abspath string, manager *GlobRuleManager, watcher *fsnotify.Watcher) error {
 	ignoredDirs := map[string]struct{}{}
 
 	return filepath.WalkDir(abspath, func(path string, d fs.DirEntry, err error) error {
