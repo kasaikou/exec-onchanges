@@ -2,7 +2,7 @@ ARG username
 ARG useruid
 ARG usergid
 
-FROM golang:1.18
+FROM golang:1.19
 
 ARG username
 ARG useruid
