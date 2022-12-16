@@ -8,15 +8,13 @@ import (
 	"github.com/gobwas/glob"
 )
 
+// Types for file path glob rule (include/exclude).
 type GlobRuleType bool
 
-type GlobRuleCmd int
-
+// Types result of checking path with glob rules in [GlobRuleManager].
 type GlobRuleResult int
 
 const (
-	GlobRuleAdd GlobRuleCmd = iota
-	GlobRuleDelete
 	GlobIncludeRule GlobRuleType = false
 	GlobExcludeRule GlobRuleType = true
 )
@@ -27,15 +25,15 @@ const (
 	GlobRuleExclude
 )
 
-type globRuleManager struct {
+type GlobRuleManager struct {
 	rootDir       string
 	prefferedRule GlobRuleType
 	includeRules  []glob.Glob
 	excludeRules  []glob.Glob
 }
 
-func newGlobRuleManager(rootDir string, prefferedRule GlobRuleType, includeGlobRules, excludeGlobRules []string) (*globRuleManager, error) {
-	manager := &globRuleManager{
+func newGlobRuleManager(rootDir string, prefferedRule GlobRuleType, includeGlobRules, excludeGlobRules []string) (*GlobRuleManager, error) {
+	manager := &GlobRuleManager{
 		rootDir:       rootDir,
 		prefferedRule: prefferedRule,
 		includeRules:  []glob.Glob{},
@@ -75,7 +73,9 @@ func compileRule(rootDir, rule string) (glob.Glob, error) {
 	}
 }
 
-func (m *globRuleManager) IsInclude(path string) (GlobRuleResult, error) {
+// Check if a file path meets the include/exclude conditions.
+// If it does not satisfy either conditions, will return [GlobRuleDefault].
+func (m *GlobRuleManager) IsInclude(path string) (GlobRuleResult, error) {
 
 	abspath := func() string {
 		if filepath.IsAbs(path) {

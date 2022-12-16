@@ -13,13 +13,17 @@ import (
 	"go.uber.org/zap"
 )
 
+// Parameters for [RouteExecOnchanges].
 type ExecOnchangesParam struct {
-	RootDir      string
-	Command      []string
-	IncludeRules []string
-	ExcludeRules []string
+	RootDir      string   // root directory for monitoring files
+	Command      []string // executing command
+	IncludeRules []string // including file path rules for execution
+	ExcludeRules []string // excluding file or directory path rules for execution
 }
 
+// Watches the specified directory and executes commands on file modified.
+//
+// Note that it is designed to be executed persistently.
 func RouteExecOnchanges(ctx context.Context, logger *zap.Logger, param ExecOnchangesParam) error {
 	absRootDir, err := filepath.Abs(param.RootDir)
 	if err != nil {
@@ -110,6 +114,12 @@ func RouteExecOnchanges(ctx context.Context, logger *zap.Logger, param ExecOncha
 	}
 }
 
+// Check to see if event requires to execute command.
+//
+// This rule should be determined regardless
+// of whether or not it is included
+// in the runtime conditions, and is intended to prevent execution
+// on deleted files or directories.
 func IsActionEvent(event fsnotify.Event) bool {
 	if fsnotify.IsRemoveEvent(event) {
 		return false
