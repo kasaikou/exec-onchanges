@@ -8,7 +8,11 @@ import (
 	"github.com/gobwas/glob"
 )
 
+// Check if a file path meets the include/exclude conditions.
+// If it does not satisfy either conditions, will return [FilepathCheckerDefault].
 type FilepathChecker interface {
+	// Check if a file path meets the include/exclude conditions.
+	// If it does not satisfy either conditions, will return [FilepathCheckerDefault].
 	IsInclude(absFilepath string) (FilepathCheckerResult, error)
 }
 
@@ -78,7 +82,7 @@ func compileRule(rootDir, rule string) (glob.Glob, error) {
 }
 
 // Check if a file path meets the include/exclude conditions.
-// If it does not satisfy either conditions, will return [GlobRuleDefault].
+// If it does not satisfy either conditions, will return [FilepathCheckerDefault].
 func (m *GlobRuleManager) IsInclude(path string) (FilepathCheckerResult, error) {
 
 	abspath := func() string {
