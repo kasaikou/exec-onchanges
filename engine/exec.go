@@ -30,13 +30,18 @@ func RouteExecOnchanges(ctx context.Context, logger *zap.Logger, param ExecOncha
 		return err
 	}
 
+	globManager, err := fsnotify.NewGlobRuleManager(absRootDir, fsnotify.GlobIncludeRule, param.IncludeRules, param.ExcludeRules)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	eventCh := make(chan fsnotify.Event)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := fsnotify.RouteWatch(ctx, logger, absRootDir, fsnotify.GlobIncludeRule, param.IncludeRules, param.ExcludeRules, eventCh); err != nil {
+		if err := fsnotify.RouteWatch(ctx, logger, absRootDir, globManager, eventCh); err != nil {
 			logger.Error("error in route watch", zap.Error(err))
 			cancel()
 		}
